@@ -5,12 +5,16 @@ def pivots(c, left=2, right=2):
         h = c[i]["high"]
         l = c[i]["low"]
 
-        if h > max(x["high"] for x in c[i-left:i]) and \
-           h >= max(x["high"] for x in c[i+1:i+right+1]):
+        left_highs = [x["high"] for x in c[i-left:i]]
+        right_highs = [x["high"] for x in c[i+1:i+right+1]]
+
+        left_lows = [x["low"] for x in c[i-left:i]]
+        right_lows = [x["low"] for x in c[i+1:i+right+1]]
+
+        if h > max(left_highs) and h >= max(right_highs):
             highs.append((i, h))
 
-        if l < min(x["low"] for x in c[i-left:i]) and \
-           l <= min(x["low"] for x in c[i+1:i+right+1]):
+        if l < min(left_lows) and l <= min(right_lows):
             lows.append((i, l))
 
     return highs, lows
@@ -22,6 +26,7 @@ def tag(x):
 
     if x[-1][1] > x[-2][1]:
         return "HH"
+
     if x[-1][1] < x[-2][1]:
         return "LH"
 
@@ -34,6 +39,7 @@ def low_tag(x):
 
     if x[-1][1] > x[-2][1]:
         return "HL"
+
     if x[-1][1] < x[-2][1]:
         return "LL"
 
@@ -71,6 +77,26 @@ def structure_bias(s):
 
 
 def break_events(c):
+    """
+    Confirmed BOS / CHoCH using completed swing levels.
+
+    A bullish break occurs when the latest close breaks
+    the most recent confirmed swing high.
+
+    A bearish break occurs when the latest close breaks
+    the most recent confirmed swing low.
+    """
+
+    if len(c) < 10:
+        return {
+            "event": "NONE",
+            "bias": "neutral",
+            "BOS": False,
+            "CHoCH": False,
+            "level": None,
+            "index": None,
+        }
+
     highs, lows = pivots(c)
 
     if not highs or not lows:
@@ -80,34 +106,55 @@ def break_events(c):
             "BOS": False,
             "CHoCH": False,
             "level": None,
+            "index": None,
         }
 
-    close = c[-1]["close"]
+    current = c[-1]
+    close = current["close"]
 
-    bull_level = highs[-1][1]
-    bear_level = lows[-1][1]
+    # Exclude swings created by the current candle.
+    confirmed_highs = [x for x in highs if x[0] < len(c) - 1]
+    confirmed_lows = [x for x in lows if x[0] < len(c) - 1]
 
-    previous = market_structure(c[:-1]) if len(c) > 30 else market_structure(c)
+    if not confirmed_highs or not confirmed_lows:
+        return {
+            "event": "NONE",
+            "bias": "neutral",
+            "BOS": False,
+            "CHoCH": False,
+            "level": None,
+            "index": None,
+        }
+
+    high_level = confirmed_highs[-1][1]
+    low_level = confirmed_lows[-1][1]
+
+    # Determine prior directional structure before current candle.
+    previous = market_structure(c[:-1])
     previous_bias = structure_bias(previous)
 
-    if close > bull_level:
+    if close > high_level:
         event = "CHoCH" if previous_bias == "bearish" else "BOS"
+
         return {
             "event": event,
             "bias": "bullish",
             "BOS": event == "BOS",
             "CHoCH": event == "CHoCH",
-            "level": bull_level,
+            "level": high_level,
+            "index": len(c) - 1,
         }
 
-    if close < bear_level:
+    if close < low_level:
         event = "CHoCH" if previous_bias == "bullish" else "BOS"
+
         return {
             "event": event,
             "bias": "bearish",
             "BOS": event == "BOS",
             "CHoCH": event == "CHoCH",
-            "level": bear_level,
+            "level": low_level,
+            "index": len(c) - 1,
         }
 
     return {
@@ -116,7 +163,31 @@ def break_events(c):
         "BOS": False,
         "CHoCH": False,
         "level": None,
+        "index": None,
     }
+
+
+def historical_break_events(c, lookback=100):
+    """
+    Scan historical candles for confirmed BOS / CHoCH events.
+    Returns newest events first.
+    """
+
+    if len(c) < 15:
+        return []
+
+    start = max(10, len(c) - lookback)
+    events = []
+
+    for i in range(start, len(c)):
+        event = break_events(c[:i+1])
+
+        if event["event"] != "NONE":
+            event = dict(event)
+            event["index"] = i
+            events.append(event)
+
+    return list(reversed(events))
 
 
 def bos(c):

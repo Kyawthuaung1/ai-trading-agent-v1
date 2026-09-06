@@ -1,110 +1,256 @@
-from .strategy import mtf_setup
+from .data import load_csv
+from .mtf import historical_mtf_events
 
 
-def _latest_completed_d1(d1, timestamp):
-    candidates = [
-        x for x in d1
-        if x["timestamp"] < timestamp
-    ]
+def _atr(c, period=14):
+    if len(c) < period + 1:
+        return 0.0
 
-    if not candidates:
+    trs = []
+
+    for i in range(1, len(c)):
+        high = c[i]["high"]
+        low = c[i]["low"]
+        prev_close = c[i - 1]["close"]
+
+        tr = max(
+            high - low,
+            abs(high - prev_close),
+            abs(low - prev_close),
+        )
+
+        trs.append(tr)
+
+    values = trs[-period:]
+
+    if not values:
+        return 0.0
+
+    return sum(values) / len(values)
+
+
+def build_trade(signal, candles, min_rr=2.0):
+    direction = signal["direction"]
+    ob = signal["order_block"]
+
+    if not ob:
         return None
 
-    return candidates[-1]
+    entry = (ob["low"] + ob["high"]) / 2.0
+    atr = _atr(candles[:signal["index"] + 1])
+
+    if atr <= 0:
+        atr = abs(ob["high"] - ob["low"])
+
+    if atr <= 0:
+        return None
+
+    if direction == "bullish":
+        stop = min(
+            ob["low"] - atr * 0.25,
+            ob["low"] - 0.0001,
+        )
+
+        risk = entry - stop
+
+        if risk <= 0:
+            return None
+
+        target = entry + risk * min_rr
+
+    else:
+        stop = max(
+            ob["high"] + atr * 0.25,
+            ob["high"] + 0.0001,
+        )
+
+        risk = stop - entry
+
+        if risk <= 0:
+            return None
+
+        target = entry - risk * min_rr
+
+    return {
+        "direction": direction,
+        "entry": entry,
+        "stop": stop,
+        "target": target,
+        "risk": risk,
+        "signal_index": signal["index"],
+    }
 
 
-def run_mtf_backtest(d1, h4, min_rr=2.0, max_trades=1000):
-    trades = []
+def simulate_trade(candles, trade, max_bars=30):
+    start = trade["signal_index"] + 1
+    end = min(len(candles), start + max_bars)
+
+    direction = trade["direction"]
+    entry = trade["entry"]
+    stop = trade["stop"]
+    target = trade["target"]
+
+    entered = False
+
+    for i in range(start, end):
+        candle = candles[i]
+
+        high = candle["high"]
+        low = candle["low"]
+
+        # Wait for price to actually reach the entry.
+        if not entered:
+            if low <= entry <= high:
+                entered = True
+            else:
+                continue
+
+        if direction == "bullish":
+            hit_stop = low <= stop
+            hit_target = high >= target
+        else:
+            hit_stop = high >= stop
+            hit_target = low <= target
+
+        # Conservative assumption:
+        # if SL and TP happen in the same candle,
+        # count the trade as a loss.
+        if hit_stop and hit_target:
+            return {
+                "result": "LOSS",
+                "exit_index": i,
+                "reason": "SL_and_TP_same_candle",
+            }
+
+        if hit_stop:
+            return {
+                "result": "LOSS",
+                "exit_index": i,
+                "reason": "SL",
+            }
+
+        if hit_target:
+            return {
+                "result": "WIN",
+                "exit_index": i,
+                "reason": "TP",
+            }
+
+    if entered:
+        return {
+            "result": "TIMEOUT",
+            "exit_index": end - 1,
+            "reason": "max_bars",
+        }
+
+    return {
+        "result": "NO_ENTRY",
+        "exit_index": end - 1,
+        "reason": "entry_not_reached",
+    }
+
+
+def run_mtf_backtest(d1, h4, min_rr=2.0):
+    candidates = historical_mtf_events(d1, h4)
+
+    signals = []
     wins = 0
     losses = 0
+    timeouts = 0
+    no_entries = 0
 
-    for i in range(40, len(h4) - 1):
-        current_h4 = h4[:i + 1]
-        ts = h4[i]["timestamp"]
+    used_indices = set()
 
-        d1_current = _latest_completed_d1(d1, ts)
+    for signal in candidates:
+        index = signal["index"]
 
-        if d1_current is None:
+        # Avoid counting the same setup repeatedly
+        # on consecutive candles.
+        if index in used_indices:
             continue
 
-        d1_index = d1.index(d1_current)
-
-        if d1_index < 30:
-            continue
-
-        current_d1 = d1[:d1_index + 1]
-
-        setup = mtf_setup(
-            current_d1,
-            current_h4,
+        trade = build_trade(
+            signal,
+            h4,
             min_rr=min_rr,
         )
 
-        if setup["status"] != "VALID":
+        if not trade:
             continue
 
-        side = setup["side"]
-        entry = setup["entry"]
-        stop = setup["stop"]
-        tp = setup["tp1"]
+        result = simulate_trade(
+            h4,
+            trade,
+        )
 
-        result = "OPEN"
-
-        for future in h4[i + 1:]:
-            if side == "LONG":
-                hit_sl = future["low"] <= stop
-                hit_tp = future["high"] >= tp
-            else:
-                hit_sl = future["high"] >= stop
-                hit_tp = future["low"] <= tp
-
-            if hit_sl and hit_tp:
-                result = "LOSS"
-                break
-
-            if hit_sl:
-                result = "LOSS"
-                break
-
-            if hit_tp:
-                result = "WIN"
-                break
-
-        if result == "WIN":
-            wins += 1
-        elif result == "LOSS":
-            losses += 1
-
-        trades.append({
-            "index": i,
-            "side": side,
-            "entry": entry,
-            "stop": stop,
-            "tp": tp,
+        signals.append({
+            "signal": signal,
+            "trade": trade,
             "result": result,
         })
 
-        if len(trades) >= max_trades:
-            break
+        used_indices.add(index)
 
-    total = wins + losses
-    win_rate = (wins / total * 100) if total else 0.0
+        if result["result"] == "WIN":
+            wins += 1
 
-    report = "\n".join([
+        elif result["result"] == "LOSS":
+            losses += 1
+
+        elif result["result"] == "TIMEOUT":
+            timeouts += 1
+
+        elif result["result"] == "NO_ENTRY":
+            no_entries += 1
+
+    total_resolved = wins + losses
+
+    if total_resolved:
+        win_rate = wins / total_resolved * 100.0
+    else:
+        win_rate = 0.0
+
+    lines = [
         "=== MTF SMC BACKTEST ===",
-        f"Signals: {len(trades)}",
+        f"Candidates: {len(candidates)}",
+        f"Signals: {len(signals)}",
         f"Wins: {wins}",
         f"Losses: {losses}",
+        f"Timeouts: {timeouts}",
+        f"No entry: {no_entries}",
+        f"Resolved trades: {total_resolved}",
         f"Win rate: {win_rate:.2f}%",
+        "",
+        "Recent signals:",
+    ]
+
+    for item in signals[:10]:
+        signal = item["signal"]
+        trade = item["trade"]
+        result = item["result"]
+
+        lines.append(
+            f"index={signal['index']} "
+            f"direction={signal['direction']} "
+            f"event={signal['event']['event']} "
+            f"entry={trade['entry']:.2f} "
+            f"SL={trade['stop']:.2f} "
+            f"TP={trade['target']:.2f} "
+            f"result={result['result']}"
+        )
+
+    lines.extend([
         "",
         "Research/backtest only.",
         "Fees, slippage and funding are not included yet.",
     ])
 
     return {
-        "trades": trades,
+        "signals": signals,
         "wins": wins,
         "losses": losses,
+        "timeouts": timeouts,
+        "no_entries": no_entries,
         "win_rate": win_rate,
-        "report": report,
+        "report": "\n".join(lines),
     }

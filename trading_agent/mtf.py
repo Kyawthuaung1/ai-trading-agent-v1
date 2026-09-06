@@ -1,4 +1,10 @@
-from .structure import market_structure, structure_bias, break_events
+from .structure import (
+    market_structure,
+    structure_bias,
+    break_events,
+    historical_break_events,
+)
+
 from .smc import (
     recent_sweep,
     recent_fvg,
@@ -52,3 +58,84 @@ def analyze_mtf(d1, h4):
         "order_block": ob,
         "liquidity_pools": pools,
     }
+
+
+def historical_mtf_events(d1, h4):
+    """
+    Historical H4 event scan.
+
+    Each H4 candle is evaluated using only information
+    available up to that candle.
+    """
+
+    results = []
+
+    for i in range(40, len(h4)):
+        current_h4 = h4[:i + 1]
+
+        h4ctx = timeframe_context(current_h4)
+
+        # Find latest completed D1 candle before H4 candle.
+        h4_time = current_h4[-1].get("timestamp")
+
+        d1_slice = d1
+
+        if h4_time:
+            filtered = [
+                x for x in d1
+                if x.get("timestamp") and x["timestamp"] < h4_time
+            ]
+
+            if filtered:
+                d1_slice = filtered
+
+        if len(d1_slice) < 30:
+            continue
+
+        d1ctx = timeframe_context(d1_slice)
+
+        event = break_events(current_h4)
+        sweep = recent_sweep(current_h4)
+        disp = recent_displacement(current_h4)
+
+        direction = event["bias"]
+
+        if direction not in ("bullish", "bearish"):
+            continue
+
+        ob = None
+
+        if disp and disp["direction"] == direction:
+            ob = order_block(
+                current_h4,
+                direction,
+                anchor_index=disp["index"],
+            )
+
+        # Historical setup candidate.
+        # We deliberately require the directional structure,
+        # but do not require every optional SMC component.
+        aligned = (
+            d1ctx["bias"] == direction
+            or d1ctx["bias"] == "neutral"
+        )
+
+        if not aligned:
+            continue
+
+        if not ob:
+            continue
+
+        results.append({
+            "index": i,
+            "direction": direction,
+            "d1_bias": d1ctx["bias"],
+            "h4_bias": h4ctx["bias"],
+            "event": event,
+            "sweep": sweep,
+            "displacement": disp,
+            "order_block": ob,
+            "last_close": current_h4[-1]["close"],
+        })
+
+    return results
