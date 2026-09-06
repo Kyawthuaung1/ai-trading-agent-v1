@@ -1,3 +1,63 @@
+def _near(a, b, tolerance):
+    return abs(a - b) <= tolerance
+
+
+def equal_highs(c, lookback=50, tolerance_ratio=0.001):
+    if len(c) < 5:
+        return []
+
+    start = max(0, len(c) - lookback)
+    result = []
+
+    for i in range(start + 2, len(c)):
+        level = c[i]["high"]
+        previous = max(x["high"] for x in c[start:i])
+
+        tolerance = level * tolerance_ratio
+
+        if _near(level, previous, tolerance):
+            result.append({
+                "type": "EQH",
+                "level": level,
+                "index": i,
+            })
+
+    return result
+
+
+def equal_lows(c, lookback=50, tolerance_ratio=0.001):
+    if len(c) < 5:
+        return []
+
+    start = max(0, len(c) - lookback)
+    result = []
+
+    for i in range(start + 2, len(c)):
+        level = c[i]["low"]
+        previous = min(x["low"] for x in c[start:i])
+
+        tolerance = level * tolerance_ratio
+
+        if _near(level, previous, tolerance):
+            result.append({
+                "type": "EQL",
+                "level": level,
+                "index": i,
+            })
+
+    return result
+
+
+def liquidity_pools(c, lookback=50):
+    eqh = equal_highs(c, lookback)
+    eql = equal_lows(c, lookback)
+
+    return {
+        "buy_side": eqh[-5:],
+        "sell_side": eql[-5:],
+    }
+
+
 def liquidity_sweep(c, lookback=20):
     if len(c) < lookback + 2:
         return {"direction": "none", "level": None, "index": None}
@@ -6,14 +66,22 @@ def liquidity_sweep(c, lookback=20):
     prior = c[start:-1]
     last = c[-1]
 
-    hi = max(x["high"] for x in prior)
-    lo = min(x["low"] for x in prior)
+    high = max(x["high"] for x in prior)
+    low = min(x["low"] for x in prior)
 
-    if last["low"] < lo and last["close"] > lo:
-        return {"direction": "bullish", "level": lo, "index": len(c) - 1}
+    if last["low"] < low and last["close"] > low:
+        return {
+            "direction": "bullish",
+            "level": low,
+            "index": len(c) - 1,
+        }
 
-    if last["high"] > hi and last["close"] < hi:
-        return {"direction": "bearish", "level": hi, "index": len(c) - 1}
+    if last["high"] > high and last["close"] < high:
+        return {
+            "direction": "bearish",
+            "level": high,
+            "index": len(c) - 1,
+        }
 
     return {"direction": "none", "level": None, "index": None}
 
@@ -28,21 +96,22 @@ def recent_sweep(c, lookback=40, window=8):
         if not prior:
             continue
 
-        hi = max(x["high"] for x in prior)
-        lo = min(x["low"] for x in prior)
+        high = max(x["high"] for x in prior)
+        low = min(x["low"] for x in prior)
+
         candle = c[i]
 
-        if candle["low"] < lo and candle["close"] > lo:
+        if candle["low"] < low and candle["close"] > low:
             return {
                 "direction": "bullish",
-                "level": lo,
+                "level": low,
                 "index": i,
             }
 
-        if candle["high"] > hi and candle["close"] < hi:
+        if candle["high"] > high and candle["close"] < high:
             return {
                 "direction": "bearish",
-                "level": hi,
+                "level": high,
                 "index": i,
             }
 
@@ -53,7 +122,7 @@ def fair_value_gap(c):
     if len(c) < 3:
         return None
 
-    a, b, d = c[-3], c[-2], c[-1]
+    a, _, d = c[-3], c[-2], c[-1]
 
     if d["low"] > a["high"]:
         return {
@@ -70,6 +139,33 @@ def fair_value_gap(c):
             "high": a["low"],
             "size": a["low"] - d["high"],
         }
+
+    return None
+
+
+def recent_fvg(c, lookback=30):
+    start = max(0, len(c) - lookback - 2)
+
+    for i in range(len(c) - 1, start + 1, -1):
+        a, _, d = c[i-2], c[i-1], c[i]
+
+        if d["low"] > a["high"]:
+            return {
+                "type": "bullish",
+                "low": a["high"],
+                "high": d["low"],
+                "size": d["low"] - a["high"],
+                "index": i,
+            }
+
+        if d["high"] < a["low"]:
+            return {
+                "type": "bearish",
+                "low": d["high"],
+                "high": a["low"],
+                "size": a["low"] - d["high"],
+                "index": i,
+            }
 
     return None
 
@@ -98,13 +194,44 @@ def displacement(c, multiplier=1.5, body_ratio=0.60):
     )
 
 
-def order_block(c, direction, search=10):
+def recent_displacement(c, lookback=8, multiplier=1.5, body_ratio=0.60):
+    start = max(0, len(c) - lookback)
+
+    for i in range(len(c) - 1, start - 1, -1):
+        if i < 11:
+            continue
+
+        window = c[:i+1]
+
+        if displacement(
+            window,
+            multiplier=multiplier,
+            body_ratio=body_ratio,
+        ):
+            candle = window[-1]
+
+            return {
+                "index": i,
+                "direction": (
+                    "bullish"
+                    if candle["close"] > candle["open"]
+                    else "bearish"
+                ),
+            }
+
+    return None
+
+
+def order_block(c, direction, anchor_index=None, search=15):
     if len(c) < 3:
         return None
 
-    start = max(0, len(c) - search - 1)
+    if anchor_index is None:
+        anchor_index = len(c) - 1
 
-    for i in range(len(c) - 2, start - 1, -1):
+    start = max(0, anchor_index - search)
+
+    for i in range(anchor_index - 1, start - 1, -1):
         x = c[i]
 
         if direction == "bullish" and x["close"] < x["open"]:

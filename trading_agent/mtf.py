@@ -1,9 +1,10 @@
 from .structure import market_structure, structure_bias, break_events
 from .smc import (
     recent_sweep,
-    fair_value_gap,
-    displacement,
+    recent_fvg,
+    recent_displacement,
     order_block,
+    liquidity_pools,
 )
 
 
@@ -23,15 +24,24 @@ def analyze_mtf(d1, h4):
     h4ctx = timeframe_context(h4)
 
     sweep = recent_sweep(h4)
-    fvg = fair_value_gap(h4)
-    disp = displacement(h4)
+    fvg = recent_fvg(h4)
+    disp = recent_displacement(h4)
 
-    direction = h4ctx["bias"]
+    direction = h4ctx["event"]["bias"]
 
-    if h4ctx["event"]["bias"] in ("bullish", "bearish"):
-        direction = h4ctx["event"]["bias"]
+    if direction not in ("bullish", "bearish"):
+        direction = h4ctx["bias"]
 
-    ob = order_block(h4, direction) if direction in ("bullish", "bearish") else None
+    ob = None
+
+    if disp and direction in ("bullish", "bearish"):
+        ob = order_block(
+            h4,
+            direction,
+            anchor_index=disp["index"],
+        )
+
+    pools = liquidity_pools(h4)
 
     return {
         "d1": d1ctx,
@@ -40,4 +50,5 @@ def analyze_mtf(d1, h4):
         "fvg": fvg,
         "displacement": disp,
         "order_block": ob,
+        "liquidity_pools": pools,
     }

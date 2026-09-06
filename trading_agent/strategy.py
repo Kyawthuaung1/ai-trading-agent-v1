@@ -7,42 +7,49 @@ def mtf_setup(d1, h4, min_rr=2.0):
     x = analyze_mtf(d1, h4)
 
     d1bias = x["d1"]["bias"]
-    h4bias = x["h4"]["bias"]
-    event = x["h4"]["event"]
+    h4event = x["h4"]["event"]
+    h4event_bias = x["h4"]["event"]["bias"]
+
     sweep = x["sweep"]
     disp = x["displacement"]
-    fvg = x["fvg"]
     ob = x["order_block"]
 
-    if d1bias == "bullish" and h4bias == "bullish":
-        side = "LONG"
-    elif d1bias == "bearish" and h4bias == "bearish":
-        side = "SHORT"
+    if d1bias == "bullish":
+        preferred = "bullish"
+    elif d1bias == "bearish":
+        preferred = "bearish"
     else:
         return {
             "status": "WAIT",
-            "reason": "D1/H4 bias not aligned",
+            "reason": "D1 context is neutral",
             "analysis": x,
         }
 
-    if sweep["direction"] != side.lower():
-        return {
-            "status": "WAIT",
-            "reason": "Liquidity sweep direction does not match setup",
-            "analysis": x,
-        }
-
-    if event["event"] not in ("BOS", "CHoCH"):
+    if h4event not in ("BOS", "CHoCH"):
         return {
             "status": "WAIT",
             "reason": "Waiting for H4 BOS/CHoCH confirmation",
             "analysis": x,
         }
 
-    if not disp:
+    if h4event_bias != preferred:
         return {
             "status": "WAIT",
-            "reason": "Waiting for H4 displacement",
+            "reason": "H4 confirmation conflicts with D1 context",
+            "analysis": x,
+        }
+
+    if sweep["direction"] != preferred:
+        return {
+            "status": "WAIT",
+            "reason": "Required liquidity sweep is not confirmed",
+            "analysis": x,
+        }
+
+    if not disp or disp["direction"] != preferred:
+        return {
+            "status": "WAIT",
+            "reason": "Required H4 displacement is not confirmed",
             "analysis": x,
         }
 
@@ -53,6 +60,8 @@ def mtf_setup(d1, h4, min_rr=2.0):
             "analysis": x,
         }
 
+    side = "LONG" if preferred == "bullish" else "SHORT"
+
     close = h4[-1]["close"]
     a = atr(h4) or close * 0.01
 
@@ -62,13 +71,20 @@ def mtf_setup(d1, h4, min_rr=2.0):
             ob["low"] - 0.25 * a,
             sweep["level"] - 0.10 * a,
         )
-        risk = entry - stop
-        tp = entry + min_rr * risk
 
         if entry >= close:
             entry = close
-            risk = entry - stop
-            tp = entry + min_rr * risk
+
+        risk = entry - stop
+
+        if risk <= 0:
+            return {
+                "status": "WAIT",
+                "reason": "Invalid long risk distance",
+                "analysis": x,
+            }
+
+        tp = entry + min_rr * risk
 
     else:
         entry = (ob["low"] + ob["high"]) / 2
@@ -76,20 +92,20 @@ def mtf_setup(d1, h4, min_rr=2.0):
             ob["high"] + 0.25 * a,
             sweep["level"] + 0.10 * a,
         )
-        risk = stop - entry
-        tp = entry - min_rr * risk
 
         if entry <= close:
             entry = close
-            risk = stop - entry
-            tp = entry - min_rr * risk
 
-    if risk <= 0:
-        return {
-            "status": "WAIT",
-            "reason": "Invalid risk distance",
-            "analysis": x,
-        }
+        risk = stop - entry
+
+        if risk <= 0:
+            return {
+                "status": "WAIT",
+                "reason": "Invalid short risk distance",
+                "analysis": x,
+            }
+
+        tp = entry - min_rr * risk
 
     actual_rr = rr(entry, stop, tp, side)
 

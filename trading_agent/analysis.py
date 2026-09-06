@@ -31,7 +31,7 @@ def analyze(c):
             f"RR: 1:{q['rr']:.2f}",
         ]
     else:
-        lines += [f"Reason: {q['reason']}"]
+        lines.append(f"Reason: {q['reason']}")
 
     lines += [
         "",
@@ -56,10 +56,12 @@ def analyze_mtf_report(d1, h4, min_rr=2.0):
 
     sweep = x["sweep"]
     fvg = x["fvg"]
+    disp = x["displacement"]
     ob = x["order_block"]
+    pools = x["liquidity_pools"]
 
     lines = [
-        "=== AI TRADING AGENT v2 | D1 + H4 SMC ===",
+        "=== AI TRADING AGENT v3 | MTF SMC ENGINE ===",
         "",
         f"D1 Bias: {x['d1']['bias']}",
         f"D1 Structure: highs={ds['high_structure']}, lows={ds['low_structure']}",
@@ -75,6 +77,13 @@ def analyze_mtf_report(d1, h4, min_rr=2.0):
     if sweep["level"] is not None:
         lines.append(f"Sweep Level: {sweep['level']:.8f}")
 
+    lines.append(
+        f"Buy-side Liquidity Pools (EQH): {len(pools['buy_side'])}"
+    )
+    lines.append(
+        f"Sell-side Liquidity Pools (EQL): {len(pools['sell_side'])}"
+    )
+
     if fvg:
         lines.append(
             f"Latest FVG: {fvg['type']} "
@@ -83,9 +92,13 @@ def analyze_mtf_report(d1, h4, min_rr=2.0):
     else:
         lines.append("Latest FVG: none")
 
-    lines.append(
-        f"Displacement: {'yes' if x['displacement'] else 'no'}"
-    )
+    if disp:
+        lines.append(
+            f"Displacement: {disp['direction']} "
+            f"(candle index {disp['index']})"
+        )
+    else:
+        lines.append("Displacement: none")
 
     if ob:
         lines.append(
