@@ -3,6 +3,7 @@ import argparse
 from trading_agent.data import load_csv
 from trading_agent.analysis import analyze, analyze_mtf_report
 from trading_agent.backtest import run_backtest
+from trading_agent.backtest_mtf import run_mtf_backtest
 
 
 p = argparse.ArgumentParser()
@@ -19,6 +20,11 @@ m.add_argument("--min-rr", type=float, default=2.0)
 b = sub.add_parser("backtest")
 b.add_argument("csv")
 
+mb = sub.add_parser("backtest-mtf")
+mb.add_argument("d1_csv")
+mb.add_argument("h4_csv")
+mb.add_argument("--min-rr", type=float, default=2.0)
+
 args = p.parse_args()
 
 if args.cmd == "analyze":
@@ -30,6 +36,11 @@ elif args.cmd == "analyze-mtf":
     h4 = load_csv(args.h4_csv)
     print(analyze_mtf_report(d1, h4, args.min_rr)["report"])
 
-else:
+elif args.cmd == "backtest":
     candles = load_csv(args.csv)
     print(run_backtest(candles)["report"])
+
+elif args.cmd == "backtest-mtf":
+    d1 = load_csv(args.d1_csv)
+    h4 = load_csv(args.h4_csv)
+    print(run_mtf_backtest(d1, h4, args.min_rr)["report"])
