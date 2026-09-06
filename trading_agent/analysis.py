@@ -33,8 +33,15 @@ def analyze(c):
     else:
         lines += [f"Reason: {q['reason']}"]
 
-    lines += ["", "Research/backtest only. No live execution."]
-    return {"setup": q, "report": "\n".join(lines)}
+    lines += [
+        "",
+        "Research/backtest only. No live execution.",
+    ]
+
+    return {
+        "setup": q,
+        "report": "\n".join(lines),
+    }
 
 
 def analyze_mtf_report(d1, h4, min_rr=2.0):
@@ -43,10 +50,13 @@ def analyze_mtf_report(d1, h4, min_rr=2.0):
 
     ds = x["d1"]["structure"]
     hs = x["h4"]["structure"]
+
     de = x["d1"]["event"]
     he = x["h4"]["event"]
+
     sweep = x["sweep"]
     fvg = x["fvg"]
+    ob = x["order_block"]
 
     lines = [
         "=== AI TRADING AGENT v2 | D1 + H4 SMC ===",
@@ -73,8 +83,19 @@ def analyze_mtf_report(d1, h4, min_rr=2.0):
     else:
         lines.append("Latest FVG: none")
 
+    lines.append(
+        f"Displacement: {'yes' if x['displacement'] else 'no'}"
+    )
+
+    if ob:
+        lines.append(
+            f"Order Block: {ob['type']} "
+            f"{ob['low']:.8f} - {ob['high']:.8f}"
+        )
+    else:
+        lines.append("Order Block: none")
+
     lines += [
-        f"Displacement: {'yes' if x['displacement'] else 'no'}",
         "",
         "TRADE PLAN",
         f"Status: {q['status']}",
@@ -91,5 +112,12 @@ def analyze_mtf_report(d1, h4, min_rr=2.0):
     else:
         lines.append(f"Reason: {q['reason']}")
 
-    lines += ["", "Research/backtest only. No live execution."]
-    return {"setup": q, "report": "\n".join(lines)}
+    lines += [
+        "",
+        "Research/backtest only. No live execution.",
+    ]
+
+    return {
+        "setup": q,
+        "report": "\n".join(lines),
+    }
