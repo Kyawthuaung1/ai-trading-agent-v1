@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+results/
+data/*.csv
+
+# Local market data
+*.csv
+
+# Local analysis files
+*.json
