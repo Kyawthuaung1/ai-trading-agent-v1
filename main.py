@@ -43,4 +43,4 @@ elif args.cmd == "backtest":
 elif args.cmd == "backtest-mtf":
     d1 = load_csv(args.d1_csv)
     h4 = load_csv(args.h4_csv)
-    print(run_mtf_backtest(d1, h4, args.min_rr)["report"])
+    print(run_mtf_backtest(d1, h4, min_rr=args.min_rr)["report"])
