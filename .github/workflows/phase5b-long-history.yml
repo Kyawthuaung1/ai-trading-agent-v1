@@ -1,0 +1,41 @@
+name: Phase 5B Long History Backtest
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phase-5B-long-history
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile check
+        run: |
+          python -m compileall -q trading_agent scripts
+
+      - name: Verify historical data
+        run: |
+          test -f examples/BTCUSDT_4h_3y.csv
+          test -f examples/BTCUSDT_1d_3y.csv
+          wc -l examples/BTCUSDT_4h_3y.csv
+          wc -l examples/BTCUSDT_1d_3y.csv
+
+      - name: Run Phase 5B
+        run: |
+          PYTHONPATH=. python scripts/phase5b_long_history.py
+
+      - name: Upload Phase 5B result
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5b-long-history-results
+          path: phase5b_results.json
