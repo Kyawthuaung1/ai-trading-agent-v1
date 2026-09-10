@@ -32,7 +32,7 @@ jobs:
 
       - name: Run Phase 5B
         run: |
-          python scripts/phase5b_long_history.py
+          PYTHONPATH=. python scripts/phase5b_long_history.py
 
       - name: Upload Phase 5B result
         uses: actions/upload-artifact@v4
