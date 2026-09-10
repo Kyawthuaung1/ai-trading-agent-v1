@@ -534,8 +534,13 @@ def run_mtf_backtest(
     min_rr=2.0,
     fee_rate=0.0004,
     slippage_bps=2.0,
+    candidates_override=None,
 ):
-    candidates = historical_mtf_events(d1, h4)
+    candidates = (
+        candidates_override
+        if candidates_override is not None
+        else historical_mtf_events(d1, h4)
+    )
 
     signals = deduplicate_candidates(
         candidates,
