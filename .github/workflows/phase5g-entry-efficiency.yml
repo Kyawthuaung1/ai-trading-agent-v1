@@ -1,0 +1,70 @@
+name: Phase 5G Entry Efficiency Lab
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phase-5G-entry-efficiency-lab
+
+jobs:
+  entry-efficiency:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile
+        run: |
+          python -m compileall -q trading_agent scripts
+
+      - name: Verify BTC dataset
+        run: |
+          test -f examples/BTCUSDT_4h_3y.csv
+          test -f examples/BTCUSDT_1d_3y.csv
+
+      - name: Run Phase 5G
+        run: |
+          PYTHONPATH=. python scripts/phase5g_entry_efficiency.py
+
+      - name: Validate result
+        run: |
+          python - <<'PY'
+          import json
+
+          with open(
+              "phase5g_results.json",
+              encoding="utf-8",
+          ) as f:
+              data = json.load(f)
+
+          assert data["phase"] == "5G"
+          assert len(data["results"]) == 4
+
+          names = {
+              item["name"]
+              for item in data["results"]
+          }
+
+          expected = {
+              "A_MIDPOINT",
+              "B_NEAR_EDGE",
+              "C_SHALLOW_RETRACE",
+              "D_STRUCTURE_REENTRY",
+          }
+
+          assert names == expected
+
+          print("Phase 5G validation: PASS")
+          PY
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5g-entry-efficiency-results
+          path: phase5g_results.json
