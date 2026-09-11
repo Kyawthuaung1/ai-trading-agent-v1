@@ -63,7 +63,7 @@ def build_trade_mode(signal, candles, mode):
 
     direction = signal["direction"]
     original_index = signal["index"]
-    ob = signal["ob"]
+    ob = signal["order_block"]
 
     if direction == "bearish":
         midpoint = (ob["low"] + ob["high"]) / 2.0
@@ -174,7 +174,7 @@ def build_trade_mode(signal, candles, mode):
         "tp2": tp2,
         "tp3": tp3,
         "risk": risk,
-        "signal_index": original_index,
+        "signal_index": trigger_index,
         "entry_mode": mode,
     }
 
@@ -279,8 +279,8 @@ def evaluate_variant(
 
     for trade in unique:
         result = simulate_trade(
-            trade,
             candles,
+            trade,
             starting_equity=equity,
             risk_pct=RISK_PCT,
             fee_rate=FEE_RATE,
@@ -330,8 +330,8 @@ def evaluate_variant(
 
     for trade in unique:
         result = simulate_trade(
-            trade,
             candles,
+            trade,
             starting_equity=equity2,
             risk_pct=RISK_PCT,
             fee_rate=FEE_RATE,
