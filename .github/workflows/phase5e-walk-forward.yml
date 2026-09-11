@@ -1,0 +1,37 @@
+name: Phase 5E Walk Forward
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phase-5E-walk-forward
+
+jobs:
+  walk-forward:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile
+        run: |
+          python -m compileall -q trading_agent scripts
+
+      - name: Verify BTC dataset
+        run: |
+          test -f examples/BTCUSDT_4h_3y.csv
+          test -f examples/BTCUSDT_1d_3y.csv
+
+      - name: Run Phase 5E
+        run: |
+          PYTHONPATH=. python scripts/phase5e_walk_forward.py
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5e-walk-forward-results
+          path: phase5e_results.json
