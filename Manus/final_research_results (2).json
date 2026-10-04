@@ -1,0 +1,62 @@
+{
+  "project": "ai-trading-agent-v1",
+  "branch": "phase-5H-missed-entry-forensics",
+  "status": "phase-5m-equivalent-complete",
+  "repository_discrepancy": {
+    "expected_artifacts": ["phase5j", "phase5k", "phase5l", "phase5m"],
+    "present_on_remote": ["phase5h"],
+    "action": "Preserved existing evidence and created a fresh canonical Phase 5M-equivalent analysis; no missing artifacts were fabricated."
+  },
+  "dataset": {
+    "d1_candles": 1095,
+    "h4_candles": 6570,
+    "start": "2023-09-11T16:00:00+00:00",
+    "end": "2026-09-10T12:00:00+00:00",
+    "deduplicated_candidates": 370
+  },
+  "evidence": {
+    "phase5h_classification_counts": {
+      "NEAR_EDGE_REACHED": 241,
+      "ZONE_NOT_TOUCHED": 129
+    },
+    "canonical_result_counts": {
+      "LOSS": 97,
+      "NO_ENTRY": 153,
+      "PARTIAL": 65,
+      "WIN": 54,
+      "TIMEOUT": 1
+    },
+    "path_counts": {
+      "SL_FIRST": 97,
+      "NO_ENTRY": 153,
+      "BREAKEVEN_OR_SL_AFTER_TARGET": 60,
+      "TP3_COMPLETE": 55,
+      "PARTIAL_TIMEOUT": 4,
+      "TIMEOUT_AFTER_ENTRY": 1
+    },
+    "entry_delay_buckets": {
+      "0-1": 14,
+      "2-5": 61,
+      "6-15": 93,
+      "16+": 49,
+      "NO_ENTRY": 153
+    },
+    "same_candle_stop_target_count": 104,
+    "losses_reaching_1r_mfe": 142,
+    "losses_reaching_2r_mfe": 82
+  },
+  "methodology": {
+    "canonical_simulator": "trading_agent.backtest_mtf.simulate_trade",
+    "entry_model": "OB midpoint",
+    "same_candle_rule": "SL first",
+    "tp1_rule": "remaining stop moves to actual entry breakeven",
+    "lookahead": false
+  },
+  "findings": {
+    "primary_current_hypothesis": "Entry availability/timing is the strongest observed structural issue.",
+    "secondary_hypothesis": "Stop placement and exit-path interaction may contribute; causal ranking is not established.",
+    "same_candle_assumption_is_material": true,
+    "live_trading_conclusion": "Not evaluated; project remains backtest/research infrastructure only."
+  },
+  "next_step": "Recover or recreate Phase 5J-5L evidence, then run fold-preserving entry, stop, exit, same-candle, regime, and model-comparison experiments."
+}
