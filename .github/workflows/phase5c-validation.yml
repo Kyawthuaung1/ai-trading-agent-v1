@@ -1,0 +1,39 @@
+name: Phase 5C Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phase-5C-validation
+
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile check
+        run: |
+          python -m compileall -q trading_agent scripts
+
+      - name: Verify historical data
+        run: |
+          test -f examples/BTCUSDT_4h_3y.csv
+          test -f examples/BTCUSDT_1d_3y.csv
+
+      - name: Run Phase 5C
+        run: |
+          PYTHONPATH=. python scripts/phase5c_validation.py
+
+      - name: Upload Phase 5C result
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5c-validation-results
+          path: phase5c_results.json

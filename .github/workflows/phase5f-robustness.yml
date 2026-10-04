@@ -1,0 +1,37 @@
+name: Phase 5F Robustness Lab
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phase-5F-robustness-lab
+
+jobs:
+  robustness:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile
+        run: |
+          python -m compileall -q trading_agent scripts
+
+      - name: Verify BTC dataset
+        run: |
+          test -f examples/BTCUSDT_4h_3y.csv
+          test -f examples/BTCUSDT_1d_3y.csv
+
+      - name: Run Phase 5F Robustness Lab
+        run: |
+          PYTHONPATH=. python scripts/phase5f_robustness.py
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5f-robustness-results
+          path: phase5f_results.json

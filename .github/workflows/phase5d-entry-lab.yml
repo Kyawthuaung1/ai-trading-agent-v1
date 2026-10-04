@@ -1,0 +1,37 @@
+name: Phase 5D Entry Model Lab
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phase-5D-entry-model-lab
+
+jobs:
+  entry-lab:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile
+        run: |
+          python -m compileall -q trading_agent scripts
+
+      - name: Verify BTC dataset
+        run: |
+          test -f examples/BTCUSDT_4h_3y.csv
+          test -f examples/BTCUSDT_1d_3y.csv
+
+      - name: Run Phase 5D Entry Lab
+        run: |
+          PYTHONPATH=. python scripts/phase5d_entry_lab.py
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5d-entry-lab-results
+          path: phase5d_results.json
