@@ -1,0 +1,37 @@
+name: Phase 6A Reproducibility Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phase-6a-repro-validation-repair
+
+jobs:
+  reproducibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run Phase 6A gate
+        run: PYTHONPATH=. python scripts/phase6a_reproducibility_check.py
+      - name: Validate report
+        run: |
+          python - <<'PY'
+          import json
+          d = json.load(open("phase6a_reproducibility_report.json", encoding="utf-8"))
+          assert d["phase"] == "6A"
+          assert d["status"] == "PASS"
+          assert not d["missing"]
+          assert d["compileall"]["returncode"] == 0
+          assert d["phase5b"]["returncode"] == 0
+          print("Phase 6A reproducibility gate: PASS")
+          PY
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6a-reproducibility-report
+          path: phase6a_reproducibility_report.json
