@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Phase 6A reproducibility gate; research/backtest only."""
 from __future__ import annotations
+import os
 import hashlib, json, subprocess, sys
 from pathlib import Path
 
@@ -72,9 +73,11 @@ def main():
         report["reason"] = "compileall failed"
 
     if report["status"] == "PASS":
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
         r = subprocess.run(
             [sys.executable, "scripts/phase5b_long_history.py"],
-            cwd=ROOT, text=True, capture_output=True
+            cwd=ROOT, text=True, capture_output=True, env=env
         )
         report["phase5b"] = {
             "returncode": r.returncode,
